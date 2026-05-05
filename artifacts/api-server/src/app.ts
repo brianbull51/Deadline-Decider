@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // From artifacts/api-server/dist to artifacts/deadline-decider/dist
-const frontendPath = path.resolve(__dirname, "../../deadline-decider/public");
+const frontendPath = path.resolve(__dirname, "../../deadline-decider/dist/public");
 
 app.use(
   pinoHttp({
