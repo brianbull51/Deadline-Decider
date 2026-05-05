@@ -1,49 +1,86 @@
-import express, { type Express } from "express";
-import cors from "cors";
-import pinoHttp from "pino-http";
-import path from "path";
-import { fileURLToPath } from "url";
-import router from "./routes";
-import { logger } from "./lib/logger";
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
 
-const app: Express = express();
+name: Build and deploy Node.js app to Azure Web App - DeadlineDecider
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
-// This points from artifacts/api-server/dist to artifacts/deadline-decider/dist after build
-const frontendPath = path.resolve(__dirname, "../../deadline-decider/dist");
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
-app.use(
-  pinoHttp({
-    logger,
-    serializers: {
-      req(req) {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
-      },
-      res(res) {
-        return {
-          statusCode: res.statusCode,
-        };
-      },
-    },
-  }),
-);
+    steps:
+      - uses: actions/checkout@v4
 
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
 
-app.use("/api", router);
+      - name: Set up Node.js version
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'pnpm'
 
-app.use(express.static(frontendPath));
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
 
-app.get("/{*path}", (_req, res) => {
-  res.sendFile(path.join(frontendPath, "index.html"));
-});
+      - name: Build
+        run: pnpm -r --if-present run build
+        env:
+          NODE_ENV: production
+          PORT: "3000"
+          BASE_PATH: "/"
 
-export default app;
+      - name: Prepare deployment package
+        run: |
+          mkdir -p deploy/artifacts/api-server
+          mkdir -p deploy/artifacts/deadline-decider
+          cp -r artifacts/api-server/dist deploy/artifacts/api-server/dist
+          cp -r artifacts/deadline-decider/dist deploy/artifacts/deadline-decider/dist
+          cp package.json deploy/package.json
+          cp pnpm-lock.yaml deploy/pnpm-lock.yaml
+          cp pnpm-workspace.yaml deploy/pnpm-workspace.yaml
+
+      - name: Upload artifact for deployment job
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-app
+          path: deploy/
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: node-app
+          path: .
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_947CDA291BAB4E4AA3490EB753ACDF64 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A3948C29B40D48D1A35E7859C839415F }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_82168A75313E4424BD52B9667EDD44CA }}
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'DeadlineDecider'
+          slot-name: 'Production'
+          package: .
