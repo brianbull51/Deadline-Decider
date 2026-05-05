@@ -49,7 +49,7 @@ jobs:
           cp pnpm-lock.yaml deploy/pnpm-lock.yaml
           cp pnpm-workspace.yaml deploy/pnpm-workspace.yaml
           echo "CHECKING FRONTEND DIST:"
-          ls -la deploy/artifacts/deadline-decider/public
+          ls -la deploy/artifacts/deadline-decider/dist/public
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
